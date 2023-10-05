@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+git_command="${GIT_COMMAND:-/usr/bin/git}"
+homegit_dir="${HOMEGIT_DIR:-$HOME/.homegit}"
+
+commands=("init" "clone" "git")
+
+if [[ " ${commands[*]} " =~ " $1 " ]]; then
+    # No reponame is given
+    reponame=default
+    command=$1
+    git_repo_url=$2
+    remainder=${@:2}
+else
+    reponame=$1
+    command=$2
+    git_repo_url=$3
+    remainder=${@:3}
+fi
+
+bare_repo_dir="$homegit_dir/$reponame"
+
+function verify_no_reponame () {
+    if [ -d "$bare_repo_dir" ]; then
+        echo "Existing repo: $reponame ($bare_repo_dir)"
+        exit 1
+    fi
+}
+
+function verify_reponame () {
+    if [[ ! -d "$bare_repo_dir" ]]; then
+        echo "Unknown repo: $reponame ($bare_repo_dir)"
+        exit 1
+    fi
+}
+
+function verify_subdirectory_of_home () {
+    if [[ ! $PWD = $HOME* ]]; then
+        echo "The current working directory must be run within the $HOME directory ($0)."
+        exit 1
+    fi
+}
+
+
+function echo_usage () {
+    if [[ $command = "init" ]]; then
+        echo "Usage: homegit [name] init"
+    elif [[ $command = "clone" ]]; then
+        echo "Usage: homegit [name] clone <repository_url>"
+    elif [[ $command = "git" ]]; then
+        echo "Usage: homegit [name] git [... git commands]"
+    else
+        echo "Usage: homegit [name] <command>"
+    fi
+}
+
+function init() {
+    verify_no_reponame
+    mkdir -p "$homegit_dir"
+    (cd $HOME && $git_command init --bare "$bare_repo_dir")
+    (cd $HOME && $git_command --git-dir=$bare_repo_dir --work-tree=$HOME config --local status.showUntrackedFiles no)
+}
+
+function clone() {
+    verify_no_reponame
+    mkdir -p "$homegit_dir"
+    (cd $HOME && $git_command clone --bare "$git_repo_url" "$bare_repo_dir")
+    (cd $HOME && $git_command --git-dir=$bare_repo_dir --work-tree=$HOME config --local status.showUntrackedFiles no)
+    (cd $HOME && $git_command --git-dir=$bare_repo_dir --work-tree=$HOME checkout)
+    # echo "Cloned $reponame ($bare_repo_dir)."
+}
+
+function git() {
+    verify_reponame
+    verify_subdirectory_of_home
+    $git_command --git-dir="$bare_repo_dir" --work-tree=$HOME $remainder
+}
+
+if [[ $command = "init" ]]; then
+    init
+    exit 0
+elif [[ $command = "clone" ]]; then
+    clone
+    exit 0
+elif [[ $command = "git" ]]; then
+    git
+    exit 0
+else
+    echo_usage
+    exit 1
+fi
