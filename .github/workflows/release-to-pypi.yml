@@ -12,7 +12,9 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-    - name: Install fli
+    - name: where are we?
+      run: pwd
+    - name: Install flit
       run: pip install flit
     - name: Build package
       run: flit build
