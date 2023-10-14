@@ -12,10 +12,15 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
+    - name: Checkout code
+      id: checkout_code
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
     - name: Install flit
       run: pip install flit
     - name: Build package
-      working-directory: ./src
       run: flit build
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
