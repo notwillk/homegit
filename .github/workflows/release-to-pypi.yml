@@ -13,10 +13,12 @@ jobs:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
     - name: where are we?
+      working-directory: .
       run: pwd
     - name: Install flit
       run: pip install flit
     - name: Build package
+      working-directory: .
       run: flit build
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
