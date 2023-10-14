@@ -12,6 +12,8 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
+    - name: Install fli
+      run: pip install flit
     - name: Build package
       run: flit build
     - name: Publish package distributions to PyPI
