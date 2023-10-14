@@ -2,6 +2,8 @@
 
 """Utility to interact with bare git repos in the home directory."""
 
+__version__ = "0.1"
+
 import sys
 import os
 import subprocess
