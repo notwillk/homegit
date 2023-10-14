@@ -14,7 +14,7 @@ jobs:
     steps:
     - name: where are we?
       working-directory: .
-      run: pwd && ls -Al
+      run: ls -Al
     - name: Install flit
       run: pip install flit
     - name: Build package
