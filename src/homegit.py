@@ -2,7 +2,7 @@
 
 """Utility to interact with bare git repos in the home directory."""
 
-__version__ = "0.0.2"
+__version__ = "0.1.1"
 
 import sys
 import os
@@ -11,7 +11,6 @@ import shutil
 from collections import namedtuple
 from enum import Enum
 
-VERSION = "0.0.1"
 HOME = os.environ.get('HOME')
 GIT_EXECUTABLE = os.getenv('GIT_EXECUTABLE') or shutil.which('git')
 HOMEGIT_DIR = os.environ.get('HOMEGIT_DIR') or f"{HOME}/.homegit"
@@ -133,7 +132,7 @@ def do_not_show_untracked_files():
 
 def run_version():
     git_version_output = execute_command([GIT_EXECUTABLE, '--version'])
-    print(f"homegit version {VERSION}")
+    print(f"homegit version {__version__}")
     print(git_version_output.stdout)
 
 def run_help():
