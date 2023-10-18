@@ -73,13 +73,11 @@ def checkout_repo():
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}",
-        "checkout",
-        "--theirs"
+        "checkout"
     ])
     if output.returncode != 0:
-        print(f"Error checking out repo ({HOMEGIT_REPO}):")
+        print(f"Warning: could not checkout latest changes ({HOMEGIT_REPO}):")
         print(output.stderr)
-        sys.exit(1)
 
 def clone_repo(git_repo_url):
     dir_exists = bare_repo_dir_exists()
