@@ -2,7 +2,7 @@
 
 """Utility to interact with bare git repos in the home directory."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 import sys
 import os
@@ -91,7 +91,11 @@ def clone_repo(git_repo_url):
         print(f"Repo ({HOMEGIT_REPO}) is already cloned")
         sys.exit(0)
 
-    os.mkdir(HOMEGIT_DIR)
+    try:
+        os.mkdir(HOMEGIT_DIR)
+    except FileExistsError:
+        pass
+
     os.mkdir(BARE_REPO_DIR)
 
     command = [GIT_EXECUTABLE, 'clone', '--bare', git_repo_url, BARE_REPO_DIR]
