@@ -2,7 +2,7 @@
 
 """Utility to interact with bare git repos in the home directory."""
 
-__version__ = "0.1"
+__version__ = "0.0.2"
 
 import sys
 import os
@@ -74,7 +74,8 @@ def checkout_repo():
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}",
-        "checkout"
+        "checkout",
+        "--theirs"
     ])
     if output.returncode != 0:
         print(f"Error checking out repo ({HOMEGIT_REPO}):")
