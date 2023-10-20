@@ -2,7 +2,7 @@
 
 """Utility to interact with bare git repos in the home directory."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 import sys
 import os
