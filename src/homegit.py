@@ -33,11 +33,14 @@ command_dict = dict(
 ParsedCommand = namedtuple('ParsedCommand', ['command', 'ignored_args'])
 ShellProcess = namedtuple('ShellProcess', ['stdout', 'stderr', 'returncode'])
 
+
 class ExistingRepoDir(Exception):
     pass
 
+
 class MissingRepoDir(Exception):
     pass
+
 
 def execute_command(cmd, cwd=None):
     process = subprocess.Popen(
@@ -50,9 +53,11 @@ def execute_command(cmd, cwd=None):
     out, err = process.communicate()
     return ShellProcess(stdout=out.decode('utf-8').strip(), stderr=err.decode('utf-8').strip(), returncode=process.returncode)
 
+
 def is_within_home_dir():
     home = os.path.abspath(HOME)
     return os.path.commonprefix([os.getcwd(), home]) == home
+
 
 def get_remote_origin_url():
     output = execute_command([
@@ -65,8 +70,10 @@ def get_remote_origin_url():
     ])
     return output.stdout if output.returncode == 0 else None
 
+
 def bare_repo_dir_exists():
     return os.path.isdir(BARE_REPO_DIR)
+
 
 def checkout_repo():
     output = execute_command([
@@ -78,6 +85,7 @@ def checkout_repo():
     if output.returncode != 0:
         print(f"Warning: could not checkout latest changes ({HOMEGIT_REPO}):")
         print(output.stderr)
+
 
 def clone_repo(git_repo_url):
     dir_exists = bare_repo_dir_exists()
@@ -105,6 +113,7 @@ def clone_repo(git_repo_url):
         print(output.stderr)
         sys.exit(1)
 
+
 def init_repo():
     if bare_repo_dir_exists():
         raise ExistingRepoDir
@@ -115,6 +124,7 @@ def init_repo():
         print(f"Error initializing repo ({HOMEGIT_REPO}):")
         print(output.stderr)
         sys.exit(1)
+
 
 def do_not_show_untracked_files():
     command = [
@@ -132,10 +142,12 @@ def do_not_show_untracked_files():
         print(output.stderr)
         sys.exit(1)
 
+
 def run_version():
     git_version_output = execute_command([GIT_EXECUTABLE, '--version'])
     print(f"homegit version {__version__}")
     print(git_version_output.stdout)
+
 
 def run_help():
     print("Usage:")
@@ -144,6 +156,7 @@ def run_help():
     print("homegit clone <repository_url>")
     print("homegit [standard git commands and arguments...]")
 
+
 def run_init():
     try:
         init_repo()
@@ -151,6 +164,7 @@ def run_init():
         print(f"Initialized {HOMEGIT_REPO} repo")
     except ExistingRepoDir:
         sys.exit(f"Existing repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
+
 
 def run_clone():
     _exec, _cmd, git_repo_url = sys.argv
@@ -163,32 +177,39 @@ def run_clone():
     except ExistingRepoDir:
         sys.exit(f"Existing repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
 
+
 def run_untrack():
     shutil.rmtree(BARE_REPO_DIR)
     print(f"Stopped tracking homegit repo at {BARE_REPO_DIR}")
+
 
 def run_git():
     if not bare_repo_dir_exists():
         sys.exit(f"Unknown repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
     if not is_within_home_dir():
-        sys.exit(f"The current working directory must be run within the {HOME} directory ({os.getcwd()})")
+        sys.exit(
+            f"The current working directory must be run within the {HOME} directory ({os.getcwd()})")
 
-    output = execute_command([
+    cmd = [
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}"
-    ] + sys.argv[1:])
+    ] + sys.argv[1:]
 
-    if output.returncode != 0:
-        sys.exit(output.stderr)
+    try:
+        subprocess.run(cmd, shell=False, stderr=sys.stderr,
+                       stdin=sys.stdin, stdout=sys.stdout, check=True)
+    except subprocess.CalledProcessError as error:
+        sys.exit(error.returncode)
 
-    print(output.stdout)
 
 def parse_command():
     return ParsedCommand(
-        command=command_dict.get(sys.argv[1], Command.GIT) if len(sys.argv) > 1 else None,
+        command=command_dict.get(sys.argv[1], Command.GIT) if len(
+            sys.argv) > 1 else None,
         ignored_args=set([arg for arg in sys.argv if arg in IGNORED_ARGS])
     )
+
 
 def main():
     if HOME is None:
@@ -211,6 +232,7 @@ def main():
         run_untrack()
     else:
         run_git()
+
 
 if __name__ == "__main__":
     main()
