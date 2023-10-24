@@ -62,7 +62,8 @@ def run(*args, **kwargs):
         naively_escaped_command_args = [arg if " " not in arg else f"\"{arg}\"" for arg in args[0]]
         command = " ".join(naively_escaped_command_args)
         print(f"Running: {command}")
-    return subprocess.run(*args, **kwargs, check=True)
+    kwargs.setdefault('check', True)
+    return subprocess.run(*args, **kwargs)
 
 
 def is_within_home_dir():
@@ -81,7 +82,7 @@ def get_remote_origin_url():
         "--get",
         "remote.origin.url"
     ]
-    completed_process = run(command, capture_output=True)
+    completed_process = run(command, capture_output=True, check=False)
     return completed_process.stdout if completed_process.returncode == 0 else None
 
 
@@ -116,7 +117,7 @@ def checkout_repo() -> bool:
         f"--work-tree={HOME}",
         "checkout"
     ]
-    completed_process = run(command, stderr=sys.stderr)
+    completed_process = run(command, stderr=sys.stderr, check=False)
     return completed_process.returncode == 0
 
 
@@ -142,8 +143,10 @@ def clone_repo(git_repo_url):
 
     command = [GIT_EXECUTABLE, 'clone', '--bare', git_repo_url, BARE_REPO_DIR]
 
-    completed_process = run(
-        command, stderr=sys.stderr)
+    try:
+        completed_process = run(command, stderr=sys.stderr)
+    except subprocess.CalledProcessError as exception:
+        raise CloneFailure from exception
 
     if completed_process.returncode != 0:
         raise CloneFailure
@@ -155,8 +158,10 @@ def init_repo():
         raise ExistingRepoDir
 
     command = [GIT_EXECUTABLE, 'init', '--bare', BARE_REPO_DIR]
-    completed_process = run(
-        command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+    try:
+        completed_process = run(command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+    except subprocess.CalledProcessError as exception:
+        raise InitFailure from exception
 
     if completed_process.returncode != 0:
         raise InitFailure
@@ -173,8 +178,11 @@ def do_not_show_untracked_files():
         "status.showUntrackedFiles",
         "no"
     ]
-    completed_process = run(
-        command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+    try:
+        completed_process = run(command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+    except subprocess.CalledProcessError as exception:
+        raise SettingShowUntrackedFilesFailure from exception
+
     if completed_process.returncode != 0:
         raise SettingShowUntrackedFilesFailure
 
@@ -183,7 +191,7 @@ def run_version():
     """Command to get the latest versions"""
     print(f"homegit version {__version__}")
     command = [GIT_EXECUTABLE, '--version']
-    run(command, stderr=sys.stderr, stdout=sys.stdout)
+    run(command, stderr=sys.stderr, stdout=sys.stdout, check=False)
 
 
 def run_help():
@@ -229,14 +237,17 @@ def run_git():
         cwd = os.getcwd()
         sys.exit(f"The current working directory must be run within the {HOME} directory ({cwd})")
 
-    cmd = [
+    command = [
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}"
     ] + sys.argv[1:]
 
     with friendly_error_messages():
-        completed_process = run(cmd, stderr=sys.stderr, stdin=sys.stdin, stdout=sys.stdout)
+        try:
+            completed_process = run(command, stderr=sys.stderr, stdin=sys.stdin, stdout=sys.stdout)
+        except subprocess.CalledProcessError as exception:
+            raise SettingShowUntrackedFilesFailure from exception
 
     sys.exit(completed_process.returncode)
 
