@@ -1,0 +1,35 @@
+Preconditions:
+    * no .homegit directory
+    * empty "home" directory
+
+[] Unit tests around argument parsing
+[] Version command looks good
+    [] Adding VERBOSE=true to version command also looks good
+[] Help command looks good
+[] Init a new homegit repo as "new"
+    [] Git status shows no files
+    [] Add file (but not commit)
+        [] Git status shows only the new file
+    [] Git commit new file
+        [] Git status shows no files
+        [] Git log shows one file
+    [] Untrack repo
+[] Clone an existing homegit repo as "default"
+    [] Git log shows non-zero history
+    [] Change tracked file
+        [] Git status shows chnages to just this file
+    [] Git commit changed file
+        [] Git status shows no files
+        [] Git log shows one file
+    [] Clone a 2nd existing homegit repo as "two"
+        [] Git log (two) shows non-zero history
+        [] Change tracked file
+            [] Git status (two) shows chnages to just this file
+            [] Git status (one) shows no change
+        [] Git commit changed file
+            [] Git status (two) shows no files
+            [] Git log (two) shows one file
+    [] Clone first repo again, confirm error
+    [] Untack first homegit repo
+    [] Clone first repo again
+    [] Git log shows non-zero history
