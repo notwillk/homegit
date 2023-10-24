@@ -4,6 +4,7 @@
 
 __version__ = "0.1.4"
 
+from contextlib import contextmanager
 import sys
 import os
 import subprocess
@@ -12,6 +13,7 @@ from collections import namedtuple
 from enum import Enum
 
 HOME = os.environ.get('HOME')
+VERBOSE = os.environ.get('VERBOSE') == "true"
 GIT_EXECUTABLE = os.getenv('GIT_EXECUTABLE') or shutil.which('git')
 HOMEGIT_DIR = os.environ.get('HOMEGIT_DIR') or f"{HOME}/.homegit"
 HOMEGIT_REPO = os.environ.get('HOMEGIT_REPO') or "default"
@@ -35,59 +37,91 @@ ShellProcess = namedtuple('ShellProcess', ['stdout', 'stderr', 'returncode'])
 
 
 class ExistingRepoDir(Exception):
-    pass
+    """The repo directory exists"""
 
 
 class MissingRepoDir(Exception):
-    pass
+    """The repo directory does not exist"""
 
 
-def execute_command(cmd, cwd=None):
-    process = subprocess.Popen(
-        " ".join(cmd) if isinstance(cmd, list) else cmd,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=True
-    )
-    out, err = process.communicate()
-    return ShellProcess(stdout=out.decode('utf-8').strip(), stderr=err.decode('utf-8').strip(), returncode=process.returncode)
+class CloneFailure(Exception):
+    """The repo failed to clone"""
+
+
+class InitFailure(Exception):
+    """The repo failed to initialize"""
+
+
+class SettingShowUntrackedFilesFailure(Exception):
+    """Failed to set status.showUntrackedFiles"""
+
+
+def run(*args, **kwargs):
+    """Wrapper for subprocess.run that adds verbose logging"""
+    if VERBOSE:
+        naively_escaped_command_args = [arg if " " not in arg else f"\"{arg}\"" for arg in args[0]]
+        command = " ".join(naively_escaped_command_args)
+        print(f"Running: {command}")
+    return subprocess.run(*args, **kwargs, check=True)
 
 
 def is_within_home_dir():
+    """Utility to determine if the CWD is within the HOME directory"""
     home = os.path.abspath(HOME)
     return os.path.commonprefix([os.getcwd(), home]) == home
 
 
 def get_remote_origin_url():
-    output = execute_command([
+    """Utility to get the remote origin URL"""
+    command = [
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}",
         "config",
         "--get",
         "remote.origin.url"
-    ])
-    return output.stdout if output.returncode == 0 else None
+    ]
+    completed_process = run(command, capture_output=True)
+    return completed_process.stdout if completed_process.returncode == 0 else None
 
 
 def bare_repo_dir_exists():
+    """Utility to get determine if the repo directory exists"""
     return os.path.isdir(BARE_REPO_DIR)
 
 
-def checkout_repo():
-    output = execute_command([
+@contextmanager
+def friendly_error_messages():
+    """Print human readable messages for known exceptions"""
+    try:
+        yield
+    except CloneFailure:
+        sys.exit(f"Error cloning repo ({HOMEGIT_REPO})")
+    except ExistingRepoDir:
+        sys.exit(f"Existing repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
+    except FileNotFoundError:
+        sys.exit(
+            f"Error executing git: No such file or directory: {GIT_EXECUTABLE}")
+    except InitFailure:
+        sys.exit(f"Error initializing repo ({HOMEGIT_REPO})")
+    except SettingShowUntrackedFilesFailure:
+        sys.exit(f"Error setting status.showUntrackedFiles for {HOMEGIT_REPO}")
+
+
+def checkout_repo() -> bool:
+    """Action to checkout the repo"""
+    command = [
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
         f"--work-tree={HOME}",
         "checkout"
-    ])
-    if output.returncode != 0:
-        print(f"Warning: could not checkout latest changes ({HOMEGIT_REPO}):")
-        print(output.stderr)
+    ]
+    completed_process = run(command, stderr=sys.stderr)
+    return completed_process.returncode == 0
 
 
 def clone_repo(git_repo_url):
+    """Action to clone the repo"""
     dir_exists = bare_repo_dir_exists()
     existing_repo_url = get_remote_origin_url() if dir_exists else None
 
@@ -107,26 +141,29 @@ def clone_repo(git_repo_url):
     os.mkdir(BARE_REPO_DIR)
 
     command = [GIT_EXECUTABLE, 'clone', '--bare', git_repo_url, BARE_REPO_DIR]
-    output = execute_command(command)
-    if output.returncode != 0:
-        print(f"Error initializing repo ({HOMEGIT_REPO}):")
-        print(output.stderr)
-        sys.exit(1)
+
+    completed_process = run(
+        command, stderr=sys.stderr)
+
+    if completed_process.returncode != 0:
+        raise CloneFailure
 
 
 def init_repo():
+    """Action to initialize the repo"""
     if bare_repo_dir_exists():
         raise ExistingRepoDir
 
     command = [GIT_EXECUTABLE, 'init', '--bare', BARE_REPO_DIR]
-    output = execute_command(command, cwd=HOMEGIT_DIR)
-    if output.returncode != 0:
-        print(f"Error initializing repo ({HOMEGIT_REPO}):")
-        print(output.stderr)
-        sys.exit(1)
+    completed_process = run(
+        command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+
+    if completed_process.returncode != 0:
+        raise InitFailure
 
 
 def do_not_show_untracked_files():
+    """Action to set the showUntrackedFiles value to 'no'"""
     command = [
         GIT_EXECUTABLE,
         f"--git-dir={BARE_REPO_DIR}",
@@ -136,20 +173,21 @@ def do_not_show_untracked_files():
         "status.showUntrackedFiles",
         "no"
     ]
-    output = execute_command(command, cwd=HOMEGIT_DIR)
-    if output.returncode != 0:
-        print(f"Error setting status.showUntrackedFiles for {HOMEGIT_REPO}:")
-        print(output.stderr)
-        sys.exit(1)
+    completed_process = run(
+        command, cwd=HOMEGIT_DIR, stderr=sys.stderr)
+    if completed_process.returncode != 0:
+        raise SettingShowUntrackedFilesFailure
 
 
 def run_version():
-    git_version_output = execute_command([GIT_EXECUTABLE, '--version'])
+    """Command to get the latest versions"""
     print(f"homegit version {__version__}")
-    print(git_version_output.stdout)
+    command = [GIT_EXECUTABLE, '--version']
+    run(command, stderr=sys.stderr, stdout=sys.stdout)
 
 
 def run_help():
+    """Command to display the help command"""
     print("Usage:")
     print("homegit init")
     print("homegit untrack")
@@ -158,37 +196,38 @@ def run_help():
 
 
 def run_init():
-    try:
+    """Command to initialize the repo"""
+    with friendly_error_messages():
         init_repo()
         do_not_show_untracked_files()
         print(f"Initialized {HOMEGIT_REPO} repo")
-    except ExistingRepoDir:
-        sys.exit(f"Existing repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
 
 
 def run_clone():
+    """Command to clone the repo"""
     _exec, _cmd, git_repo_url = sys.argv
 
-    try:
+    with friendly_error_messages():
         clone_repo(git_repo_url)
         do_not_show_untracked_files()
-        checkout_repo()
+        if not checkout_repo():
+            print(f"Warning: could not checkout latest changes ({HOMEGIT_REPO})")
         print(f"Cloned {HOMEGIT_REPO} repo")
-    except ExistingRepoDir:
-        sys.exit(f"Existing repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
 
 
 def run_untrack():
+    """Command to untrack the repo"""
     shutil.rmtree(BARE_REPO_DIR)
     print(f"Stopped tracking homegit repo at {BARE_REPO_DIR}")
 
 
 def run_git():
+    """Command to run underlying git command"""
     if not bare_repo_dir_exists():
         sys.exit(f"Unknown repo: {HOMEGIT_REPO} ({BARE_REPO_DIR})")
     if not is_within_home_dir():
-        sys.exit(
-            f"The current working directory must be run within the {HOME} directory ({os.getcwd()})")
+        cwd = os.getcwd()
+        sys.exit(f"The current working directory must be run within the {HOME} directory ({cwd})")
 
     cmd = [
         GIT_EXECUTABLE,
@@ -196,14 +235,14 @@ def run_git():
         f"--work-tree={HOME}"
     ] + sys.argv[1:]
 
-    try:
-        subprocess.run(cmd, shell=False, stderr=sys.stderr,
-                       stdin=sys.stdin, stdout=sys.stdout, check=True)
-    except subprocess.CalledProcessError as error:
-        sys.exit(error.returncode)
+    with friendly_error_messages():
+        completed_process = run(cmd, stderr=sys.stderr, stdin=sys.stdin, stdout=sys.stdout)
+
+    sys.exit(completed_process.returncode)
 
 
 def parse_command():
+    """Utility to parse the CLI arguments"""
     return ParsedCommand(
         command=command_dict.get(sys.argv[1], Command.GIT) if len(
             sys.argv) > 1 else None,
@@ -212,6 +251,7 @@ def parse_command():
 
 
 def main():
+    """Entrypoint for the script"""
     if HOME is None:
         sys.exit("You must set a value of the HOME environment vairable")
 
